@@ -172,45 +172,49 @@ class ApacheLog(CollectdPlugin):
             except Empty:
                 break
 
-            request = self.parser(line)
-            method = request['request_method']
-            status = 'status_%sxx' % request['status'][:len(request['status'])-2]
-
-            self.debug(datetime.now())
-            self.debug(line)
-
-            # Update request count by method and HTTP status
             try:
-                self.values[method]['count'] += 1
-            except KeyError:
-                # Initialize values dict for method with request fields
-                self.values[method] = {
-                    k:0 for k in request.keys() if not k in ['time_us', 'status']
-                }
-                if 'time_us' in request.keys():
-                    self.values[method]['time_us'] = []
-                self.values[method]['count'] = 1
-            try:
-                self.values[method][status] += 1
-            except KeyError:
-                self.values[method][status] = 1
+                request = self.parser(line)
+                method = request['request_method']
+                status = 'status_%sxx' % request['status'][:len(request['status'])-2]
 
-            # Read and save values from request
-            for key, val in request.iteritems():
-                if key == 'status':
-                        continue # Status has been already processed
+                self.debug(datetime.now())
+                self.debug(line)
 
-                val = remap(key, val)
+                # Update request count by method and HTTP status
                 try:
-                    if key == 'time_us':
-                        self.update_response_time(method, int(val)/1000)
-                    else:
-                        self.values[method][key] += int(val)
-                except TypeError:
-                    pass
-                except ValueError:
-                    pass # Ignore values that cannot be converted to int
+                    self.values[method]['count'] += 1
+                except KeyError:
+                    # Initialize values dict for method with request fields
+                    self.values[method] = {
+                        k:0 for k in request.keys() if not k in ['time_us', 'status']
+                    }
+                    if 'time_us' in request.keys():
+                        self.values[method]['time_us'] = []
+                    self.values[method]['count'] = 1
+                try:
+                    self.values[method][status] += 1
+                except KeyError:
+                    self.values[method][status] = 1
 
+                # Read and save values from request
+                for key, val in request.iteritems():
+                    if key == 'status':
+                            continue # Status has been already processed
+
+                    val = remap(key, val)
+                    try:
+                        if key == 'time_us':
+                            self.update_response_time(method, int(val)/1000)
+                        else:
+                            self.values[method][key] += int(val)
+                    except TypeError:
+                        pass
+                    except ValueError:
+                        pass # Ignore values that cannot be converted to int
+
+            # Continue to the next line if the current one cannot be parsed.
+            except LineDoesntMatchException as e:
+                self.err(e)
 
     def update_response_time(self, method, val):
         cmax = self.values['response_time']['max']
